@@ -1,3 +1,69 @@
+% ----------------- BEGIN UTILS ----------------- %
+%
+colour_code(red, "\e[31m").
+colour_code(green, "\e[32m").
+colour_code(blue, "\e[34m").
+colour_code(white, "\e[37m").
+colour_code(reset, "\e[0m").
+
+
+colour(b, _colour) :- colour_code(blue, _colour), !.
+colour('E', _colour) :- colour_code(white, _colour), !.
+colour(_, _colour) :- colour_code(green, _colour), !.
+
+print_grid(_, _j, _, M) :- _j >= M, write("|"), !.
+print_grid(_i, _j, N, M) :- 
+  fxd_cell(_i, _j, C), 
+  colour(C, _colour),
+  colour_code(reset, _r_colour),
+  format("| ~w~w~w ", [_colour, C, _r_colour]), 
+  (J is _j + 1, print_grid(_i, J, N, M)).
+
+print_line(_i, _n, _) :- _i >= _n, !.
+print_line(_i, _n, _char) :-
+write(_char),
+  I is _i + 1, 
+  print_line(I, _n, _char).
+
+print(_i, _, N, M) :- 
+  (
+    _m is 4 * M, 
+    print_line(0, _m, '-'), 
+    write('-\n')
+  ),
+  _i >= N, !.
+print(_i, _j, N, M) :- 
+  (print_grid(_i, _j, N, M), write('\n')), 
+  I is _i + 1, 
+  print(I, _j, N, M).
+
+at(_grid, _i, _j, _cell) :- 
+  nth0(_i, _grid, _row),
+  nth0(_j, _row, _cell).
+
+print_grid(_, _, _j, _, M) :- _j >= M, write("|"), !.
+print_grid(_grid, _i, _j, N, M) :- 
+  at(_grid, _i, _j, C), 
+  colour(C, _colour),
+  colour_code(reset, _r_colour),
+  format("| ~w~w~w ", [_colour, C, _r_colour]), 
+  (J is _j + 1, print_grid(_grid, _i, J, N, M)).
+
+print(_, _i, _, N, M) :- 
+  (
+    _m is 4 * M, 
+    print_line(0, _m, '-'), 
+    write('-\n')
+  ),
+  _i >= N, !.
+print(_grid, _i, _j, N, M) :- 
+  (print_grid(_grid, _i, _j, N, M), write('\n')), 
+  I is _i + 1, 
+  print(_grid, I, _j, N, M).
+
+
+% ------------------ END UTILS ------------------ %
+
 :- include('utils.pl').
 
 /*
@@ -24,6 +90,7 @@ solve_cell(Row, Col, Num) :-
  * Num if it contains a number
  * green | g for a green cell
  * blue | b for a blue cell
+ * E for empty cell
  */
 
 :- dynamic row_count/1.
@@ -42,15 +109,15 @@ init_grid() :-
   row_count(N),
   col_count(M),
   create_grid(0, 0, N, M, 'E').
-  % create_grid(_grid, N, M, 'E'),
-  % asserta(grid(_grid)).
 
-main :- init_grid().
+main :- 
+  clear(),
+  init_grid().
 
 clear :-
-    retractall(fxd_cell(_, _, _)),
-    retractall(row_count(_)),
-    retractall(col_count(_)).
+  retractall(fxd_cell(_, _, _)),
+  retractall(row_count(_)),
+  retractall(col_count(_)).
 
 % check if a cell is outside the borders of the grid
 outside(_i, _j) :-
@@ -92,23 +159,10 @@ dfs(_i, _j, _num, _count) :-
 exists(_i, _j, _num, _out) :- 
   (fxd_cell(_i, _j, _num) -> _out = 1 ; _out = 0).
 
-sea_cells_count(_i, _j, 0) :- outside(_i, _j), !.
-sea_cells_count(_i, _j, _count) :- 
-  exists(_i, _j, b, _out),
-  J is _j + 1,
-  sea_cells_count(_i, J, _r_count),
-  _count is _out + _r_count.
-
-sea_count(_i, _j, 0) :- outside(_i, _j), !.
-sea_count(_i, _j, _count) :-
-  sea_cells_count(_i, _j, _r_count),
-  I is _i + 1,
-  sea_count(I, _j, _rem),
-  _count is _r_count + _rem.
-
 one_sea :- 
   once(fxd_cell(X, Y, b)),
-  sea_count(0, 0, _s_c_count),
+  row_count(N),
+  count(0, 0, N, b, _s_c_count),
   clear_vis(),
   dfs(X, Y, b, _count),
   _count = _s_c_count.
@@ -217,9 +271,9 @@ is_valid_solution :-
 % :- include('grid.pl').
 
 
-% ----------------------------------------------------------------------- %
-% ----------------------------> solve section <-------------------------- %
-% ----------------------------------------------------------------------- %
+% --------------------------------------------------------------- %
+% ------------------------> solve section <---------------------- %
+% --------------------------------------------------------------- %
 
 set(_i, _j, _) :- outside(_i, _j), !.
 set(_i, _j, _num) :-
@@ -305,9 +359,7 @@ solve_neighbour_island(_i, _j, M) :-
   (is_numbered_cell(_i, _j) 
   -> 
     (
-      solve_neighbour_row(_i, _j, -1),
       solve_neighbour_row(_i, _j, +1),
-      solve_neighbour_col(_i, _j, -1),
       solve_neighbour_col(_i, _j, +1)
     )
   ; 
@@ -437,26 +489,10 @@ count(_i, _j, N, _num, _count) :-
   count(I, _j, N, _num, _rem_count),
   _count is _r_count + _rem_count.
 
-% count the number of empty cells in a grid
-% i.e. cells with value = 'E'
-empty_cells(_i, _j, 0) :- outside(_i, _j), !.
-empty_cells(_i, _j, _count) :-
-  is_empty(_i, _j, _out),
-  J is _j + 1,
-  empty_cells(_i, J, _rem),
-  _count is _out + _rem.
-
-empty_cells(_i, _, N, 0) :- _i >= N, !.
-empty_cells(_i, _j, N, _count) :-
-  empty_cells(_i, _j, _r_count),
-  I is _i + 1, 
-  empty_cells(I, _j, N, _rem_count),
-  _count is _r_count + _rem_count.
-
 no_empty_cells() :-
   row_count(N),
-  empty_cells(0, 0, N, Count),
-  Count = 0.
+  count(0, 0, N, _empty_cells),
+  _empty_cells = 0.
 
 
 empty_cells_set(_empty_cells_set) :-
@@ -466,7 +502,6 @@ empty_cells_set(_empty_cells_set) :-
 % ----------------- Find solution ----------------- %
 % ------------------------------------------------- %
 
-:- dynamic black/2.
 :- dynamic solution_not_found/1.
 :- dynamic solution/1.
 
@@ -487,20 +522,22 @@ validate_solution :-
   print(_grid, 0, 0, N, M),
   !.
 
-permute([]) :- validate_solution(), !.
-permute([(X, Y) | T]) :-
+permutate([]) :- validate_solution(), !.
+permutate([(X, Y) | T]) :-
   set(X, Y, b),
-  (no_2_by_2_sea() -> (permute(T) -> true ; true) ; true),
+  (no_2_by_2_sea() -> (permutate(T) -> true ; true) ; true),
   set(X, Y, g),
-  (no_2_by_2_sea() -> (permute(T) -> true ; true) ; true).
+  (no_2_by_2_sea() -> (permutate(T) -> true ; true) ; true).
 
 solve :-
   retractall(solution(_)),
   asserta(solution_not_found(1)),
   row_count(N),
   col_count(M),
-  solve_one_island(0, 0, N, M),
-  solve_neighbour_island(0, 0, N, M),
-  solve_diag_island(0, 0, N, M),
-  solve_sur_square(0, 0, N, M).
+  (solve_one_island(0, 0, N, M), print()),
+  (solve_neighbour_island(0, 0, N, M), print()),
+  (solve_diag_island(0, 0, N, M), print()),
+  (solve_sur_square(0, 0, N, M), print()),
+  empty_cells_set(_set),
+  permutate(_set).
 
